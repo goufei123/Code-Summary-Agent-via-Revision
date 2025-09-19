@@ -55,13 +55,11 @@ MODEL_CONFIG = {
         "type": "api",
         "model": "gpt-4o",
         "base_url": "https://api.openai.com/v1",
-        "api_key": os.getenv("OPENAI_API_KEY")
     },
     "deepseek": {
         "type": "api",
         "model": "deepseek-chat",
         "base_url": "https://api.deepseek.com",
-        "api_key": os.getenv("OPENAI_API_KEY")
     },
     "codellama": {
         "type": "local",
@@ -334,7 +332,6 @@ def callee_generate_task(args, query, results):
             llm = ChatOpenAI(
                 model="gpt-4",
                 temperature=args.temperature,
-                api_key="sk-proj-H5sIv2NWZfGdGTppPtmBT3BlbkFJsigPiyhyP1ns5zpOF8y0"
             )
             tools = [extract_docstring]
             prompt_template = PromptTemplate.from_template(
