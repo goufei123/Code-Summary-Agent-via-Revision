@@ -1,26 +1,13 @@
 # Code-Summary-Agent-via-Revision
-This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*.
-
-## Content
-TBD
-
-[//]: # (1. [Project Summary]&#40;#1-Project-Summary&#41;<br>)
-
-[//]: # (2. [Get Started]&#40;#2-Get-Started&#41;<br>)
-
-[//]: # (&ensp;&ensp;[2.1 Requirements]&#40;#21-Requirements&#41;<br>)
-
-[//]: # (&ensp;&ensp;[2.2 Dataset]&#40;#22-Dataset&#41;<br>)
-
-[//]: # (&ensp;&ensp;[2.3 Comment Intent Labeling Tool]&#40;#23-Comment-Intent-Labeling-Tool&#41;<br>)
-
-[//]: # (&ensp;&ensp;[2.4 Developer-Intent Driven Comment Generator]&#40;#24-Developer-Intent-Driven-Comment-Generator&#41;<br>)
-
-[//]: # (3. [Application]&#40;#3-Application&#41;<br>)
+This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements an iterative generator–evaluator–planner–reviser loop, enhanced with external tools for content/context extraction and classifier-voting example selection.
 
 ## 1 Project Summary
-
-This paper proposes an iterative agentic framework for intent-aware code summarization, which leverages a generator–evaluator design to progressively refine code summaries based on developer intents. The framework integrates multiple specialized agents that collaboratively generate and evaluate comments to improve summary precision and relevance. Key contributions include an extensive empirical study on intent-aware summarization, comprehensive experiments demonstrating significant improvements over state-of-the-art baselines, and the introduction of a novel iterative approach that effectively captures developer intent in code comments.
+The framework progressively refines code summaries to align with developer intents (What, Why, How-it-is-done, Property). It integrates:
+- A generator for initial summaries.
+- An evaluator that scores intent alignment, content adequacy, and usefulness.
+- A planner that proposes revision strategies.
+- A reviser that incorporates revision plans and supply information.
+Supply information is built from **content-aware analysis** (via a Java parser tool) and **example-aware retrieval** (via instance selection plus classifier voting). Classifier-voting ensembles multiple finetuned classifiers to filter high-confidence examples. Experiments show significant improvements over baseline summarization models.
 
 ## 2 Get Started
 ### 2.1 Requirements
@@ -31,20 +18,47 @@ This paper proposes an iterative agentic framework for intent-aware code summari
 * datasets
 * numpy
 * tqdm
+* jsonlines
+* Java Runtime (for running the parser JAR)
 
 ### 2.2 Dataset
-#### Intent-annotated CSN-Java dataset
-The benchmark dataset used in this work is an intent-annotated subset of the CodeSearchNet-Java [CSN-java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code-comment pairs labeled with four main developer intent categories: What, Why, How-it-is-done, and Property. The dataset is constructed by following prior work on intent annotation, excluding comments labeled as "Others" and rare categories such as "How-to-use". Scripts to preprocess and generate this dataset are provided in the `src/data/` directory. The dataset download link and detailed instructions are available there.
+We use an intent-annotated subset of the [CodeSearchNet-Java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code–comment pairs annotated with What, Why, How-it-is-done, and Property. Comments labeled as “Others” and rare categories like “How-to-use” are excluded. Scripts to preprocess and build this dataset are in `src/data/`. Classifier training for intent labeling is in `src/voting_classifier/`.
 
-### 2.3 Comment Intent Labeling Tool
-Intent labels are generated using a classifier fine-tuned on human-annotated data. The fine-tuning and prediction scripts for the intent classifier are provided in the `src/intent_classifier/` directory.
+### 2.3 Tools
+Two key tools support the framework, defined in `tool_module.py`:
+- `get_context`: calls a Java parser JAR (configured via `JAVA_PARSER_JAR`) to extract content information such as docstrings, targets, callees, and callers.
+- `get_examples`: retrieves candidate examples using `construction.instance_selection` and filters them with a finetuned classifier (local or HTTP service), applying majority or weighted voting.
 
-### 2.4 Developer-Intent Driven Comment Generator
-To run the iterative agentic framework for intent-aware code summarization:
-
-1. Navigate to the `src/agent_framework/` directory.
-2. Run the framework with the desired configuration file:
+### 2.4 Classifier Voting
+The script `prediction.py` performs voting across multiple classifier checkpoints:
 ```
-python run_agent_framework.py --config configs/{config_file}.yaml
+python prediction.py \
+  --input ./data/test.jsonl \
+  --output ./output/preds.jsonl \
+  --checkpoints ckpt_a.pt,ckpt_b.pt,ckpt_c.pt \
+  --vote majority
 ```
-3. Results and logs will be saved in the `outputs/` directory.
+It supports majority and weighted voting, both locally and via HTTP endpoints. Metrics (accuracy, macro precision/recall/F1) are saved alongside predictions.
+
+### 2.5 Agent Framework
+Run the iterative agentic summarization with:
+```
+python multi_agent.py \
+  --model deepseek \
+  --prompt_filename ./output/cls_examples_test_all.jsonl \
+  --output_dir ./output/eval_result/ \
+  --max_rounds 3 \
+  --threshold 4.0 \
+  --temperature 0.2
+```
+This loop generates, evaluates, plans, and revises summaries until a quality threshold or max rounds is reached. Supply information integrates outputs from `get_context` and `get_examples`.
+
+### 2.6 Utils
+General helper functions are in `utils.py`:
+- `set_seed(seed)`: set random seeds for reproducibility.
+- `read_jsonl(path)`, `write_jsonl(path, rows)`: handle JSONL files.
+- `normalize_text(s)`: normalize text to lowercase and strip extra spaces.
+- `average_dicts(dicts)`: average numeric values across dictionaries.
+
+## 3 Results
+Outputs include per-intent BLEU, ROUGE-L, and METEOR scores, with detailed JSONL logs and metrics.
