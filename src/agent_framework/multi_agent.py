@@ -171,7 +171,7 @@ def generate(args, data):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", choices=["gpt", "deepseek"], default="deepseek")
-    parser.add_argument("--prompt_filename", default="./output/cls_examples_test_all.jsonl", type=str)
+    parser.add_argument("--prompt_filename", default="./dataset/cls_examples_test_all.jsonl", type=str)
     parser.add_argument("--output_dir", default="./output/eval_result/", type=str)
     parser.add_argument("--temperature", default=0.75, type=float)
     parser.add_argument("--test_number", default=15000, type=int)

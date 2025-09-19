@@ -60,5 +60,6 @@ General helper functions are in `utils.py`:
 - `normalize_text(s)`: normalize text to lowercase and strip extra spaces.
 - `average_dicts(dicts)`: average numeric values across dictionaries.
 
-## 3 Results
-Outputs include per-intent BLEU, ROUGE-L, and METEOR scores, with detailed JSONL logs and metrics.
+[//]: # (## 3 Results)
+
+[//]: # (Outputs include per-intent BLEU, ROUGE-L, and METEOR scores, with detailed JSONL logs and metrics.)

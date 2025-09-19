@@ -4,44 +4,11 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f57f81a6-ac88-4812-89aa-d9a3a01c36d2" name="Changes" comment="read">
-      <change afterPath="$PROJECT_DIR$/src/agent_framework/tool_module.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/bleu.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/calc_code_bleu.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/calculate_summary_and_bug.ipynb" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/calculate_summary_and_bug.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/calculate_sythesis.ipynb" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/dataflow_match.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/bleu/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/bleu/bleu.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/bleu/bleu_scorer.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/bleu/google_bleu.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/bleu/nltk_bleu.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/meteor/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/meteor/data/paraphrase-en.gz" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/meteor/meteor-1.5.jar" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/meteor/meteor.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/rouge/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/evall/rouge/rouge.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/keywords/c_sharp.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/keywords/java.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/keywords/python.txt" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/DFG.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/build.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/build.sh" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/my-languages.so" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/parser/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/syntax_match.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/evaluation/weighted_ngram_match.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/voting_classifier/prediction.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
+    <list default="true" id="f57f81a6-ac88-4812-89aa-d9a3a01c36d2" name="Changes" comment="commit">
+      <change afterPath="$PROJECT_DIR$/src/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/agent_framework/dataloader.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/src/agent_framework/multi_agent.py" beforeDir="false" afterPath="$PROJECT_DIR$/src/agent_framework/multi_agent.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -79,23 +46,25 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent">{
-  &quot;keyToString&quot;: {
-    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
-    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
-    &quot;last_opened_file_path&quot;: &quot;/Users/geyifei/Desktop/NJU/reproduction/Code-Summary-Agent-via-Revision/src&quot;,
-    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
-    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
-    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
-    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
-    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
-    &quot;settings.editor.selected.configurable&quot;: &quot;org.jetbrains.plugins.github.ui.GithubSettingsConfigurable&quot;,
-    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "git-widget-placeholder": "main",
+    "last_opened_file_path": "/Users/geyifei/Desktop/NJU/reproduction/Code-Summary-Agent-via-Revision/src",
+    "node.js.detected.package.eslint": "true",
+    "node.js.detected.package.tslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "node.js.selected.package.tslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm",
+    "settings.editor.selected.configurable": "org.jetbrains.plugins.github.ui.GithubSettingsConfigurable",
+    "vue.rearranger.settings.migration": "true"
   }
-}</component>
+}]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="$PROJECT_DIR$/src" />
+      <recent name="$PROJECT_DIR$/src/outputs" />
     </key>
   </component>
   <component name="SharedIndexes">
@@ -117,7 +86,7 @@
       <workItem from="1758258311524" duration="332000" />
       <workItem from="1758258682926" duration="1868000" />
       <workItem from="1758264748770" duration="5172000" />
-      <workItem from="1758270221067" duration="308000" />
+      <workItem from="1758270221067" duration="1150000" />
     </task>
     <task id="LOCAL-00001" summary="read">
       <option name="closed" value="true" />
@@ -167,7 +136,15 @@
       <option name="project" value="LOCAL" />
       <updated>1758265098559</updated>
     </task>
-    <option name="localTasksCounter" value="7" />
+    <task id="LOCAL-00007" summary="commit">
+      <option name="closed" value="true" />
+      <created>1758270918923</created>
+      <option name="number" value="00007" />
+      <option name="presentableId" value="LOCAL-00007" />
+      <option name="project" value="LOCAL" />
+      <updated>1758270918923</updated>
+    </task>
+    <option name="localTasksCounter" value="8" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -186,6 +163,7 @@
   </component>
   <component name="VcsManagerConfiguration">
     <MESSAGE value="read" />
-    <option name="LAST_COMMIT_MESSAGE" value="read" />
+    <MESSAGE value="commit" />
+    <option name="LAST_COMMIT_MESSAGE" value="commit" />
   </component>
 </project>
