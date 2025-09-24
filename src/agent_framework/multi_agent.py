@@ -10,6 +10,7 @@ from evaluation.evall.meteor import Meteor
 from openai import OpenAI
 from collections import defaultdict
 from tool_module import get_examples, get_context
+from langgraph.graph import StateGraph, END
 
 
 INTENT_NAME = {"what": "What", "done": "How-it-is-done", "property": "Property", "why": "Why"}
@@ -101,20 +102,22 @@ def plan_revisions(client, model_name, intent, code, summary, scores, temperatur
     except Exception:
         return []
 
-def build_supply_info(intent, code, parsed_results):
-    ex = get_examples(intent, code) or []
-    ctx = get_context(parsed_results if parsed_results else {"code": code}) or ""
-    ex_texts = []
-    for i, e in enumerate(ex[:3]):
-        ec = e.get("code", "")
-        cm = e.get("comment", "")
-        ex_texts.append(f"Example {i+1}:\nCode:\n{ec}\nComment:\n{cm}")
-    ex_block = "\n\n".join(ex_texts)
+def build_supply_info(intent, code, parsed_results, need_context=False, need_examples=False):
     parts = []
-    if ex_block:
-        parts.append(ex_block)
-    if ctx:
-        parts.append(ctx)
+    if need_examples:
+        ex = get_examples(intent, code) or []
+        ex_texts = []
+        for i, e in enumerate(ex[:3]):
+            ec = e.get("code", "")
+            cm = e.get("comment", "")
+            ex_texts.append(f"Example {i+1}:\nCode:\n{ec}\nComment:\n{cm}")
+        ex_block = "\n\n".join(ex_texts)
+        if ex_block:
+            parts.append(ex_block)
+    if need_context:
+        ctx = get_context(parsed_results if parsed_results else {"code": code}) or ""
+        if ctx:
+            parts.append(ctx)
     return "\n\n".join(parts)
 
 def revise_summary(client, model_name, intent, code, prev_summary, plans, supply_info, temperature):
@@ -123,17 +126,83 @@ def revise_summary(client, model_name, intent, code, prev_summary, plans, supply
     data = {"intent": name, "code": code, "previous_summary": prev_summary, "plans": plans, "supply_info": supply_info}
     return chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(data)}], temperature)
 
-def run_agent_loop(client, model_name, intent, code, parsed_results, temperature, max_rounds, threshold):
-    summary = initial_summary(client, model_name, intent, code, temperature)
-    for _ in range(max_rounds):
-        avg, scores = assess_summary(client, model_name, intent, code, summary, temperature)
-        if avg >= threshold:
-            return summary, avg, scores
-        plans = plan_revisions(client, model_name, intent, code, summary, scores, temperature)
-        supply_info = build_supply_info(intent, code, parsed_results)
-        summary = revise_summary(client, model_name, intent, code, summary, plans, supply_info, temperature)
-    avg, scores = assess_summary(client, model_name, intent, code, summary, temperature)
-    return summary, avg, scores
+class AgentState(dict):
+    pass
+
+def build_agent_graph(client, model_name, temperature, threshold, max_rounds):
+    def node_generate(state: AgentState):
+        s = state.copy()
+        s["summary"] = initial_summary(client, model_name, s["intent"], s["code"], temperature)
+        s["round"] = 0
+        return s
+
+    def node_evaluate(state: AgentState):
+        s = state.copy()
+        avg, scores = assess_summary(client, model_name, s["intent"], s["code"], s.get("summary", ""), temperature)
+        s["avg"] = avg
+        s["scores"] = scores
+        return s
+
+    def node_plan(state: AgentState):
+        s = state.copy()
+        plans = plan_revisions(client, model_name, s["intent"], s["code"], s.get("summary", ""), s.get("scores", {}), temperature)
+        s["plans"] = plans
+        need_ctx = False
+        need_ex = False
+        for p in plans or []:
+            t = str(p).lower()
+            if any(k in t for k in ["context", "content", "doc", "callee", "caller"]):
+                need_ctx = True
+            if any(k in t for k in ["example", "few-shot", "few shot", "retriev"]):
+                need_ex = True
+        s["need_context"] = need_ctx
+        s["need_examples"] = need_ex
+        return s
+
+    def node_supply(state: AgentState):
+        s = state.copy()
+        supply = build_supply_info(s["intent"], s["code"], s.get("parsed_results"), s.get("need_context", False), s.get("need_examples", False))
+        s["supply_info"] = supply
+        return s
+
+    def node_revise(state: AgentState):
+        s = state.copy()
+        new_summary = revise_summary(client, model_name, s["intent"], s["code"], s.get("summary", ""), s.get("plans", []), s.get("supply_info", ""), temperature)
+        s["summary"] = new_summary
+        s["round"] = int(s.get("round", 0)) + 1
+        return s
+
+    def should_stop(state: AgentState):
+        avg = float(state.get("avg", 0.0))
+        rnd = int(state.get("round", 0))
+        if avg >= threshold or rnd >= max_rounds:
+            return True
+        return False
+
+    graph = StateGraph(AgentState)
+    graph.add_node("generate", node_generate)
+    graph.add_node("evaluate", node_evaluate)
+    graph.add_node("plan", node_plan)
+    graph.add_node("supply", node_supply)
+    graph.add_node("revise", node_revise)
+    graph.set_entry_point("generate")
+    graph.add_edge("generate", "evaluate")
+    graph.add_conditional_edges(
+        "evaluate",
+        lambda s: "end" if should_stop(s) else "continue",
+        {"end": END, "continue": "plan"},
+    )
+    graph.add_edge("plan", "supply")
+    graph.add_edge("supply", "revise")
+    graph.add_edge("revise", "evaluate")
+    return graph.compile()
+
+
+def run_agent_graph(client, model_name, intent, code, parsed_results, temperature, max_rounds, threshold):
+    app = build_agent_graph(client, model_name, temperature, threshold, max_rounds)
+    state = AgentState({"intent": intent, "code": code, "parsed_results": parsed_results})
+    out = app.invoke(state)
+    return out.get("summary", ""), float(out.get("avg", 0.0)), out.get("scores", {})
 
 def generate(args, data):
     client, model_name = get_model_client(args)
@@ -149,7 +218,7 @@ def generate(args, data):
         cls = obj["label"]
         if cls not in intents:
             continue
-        pred, avg, scores = run_agent_loop(client, model_name, cls, code, obj.get("parsed_results"), args.temperature, args.max_rounds, args.threshold)
+        pred, avg, scores = run_agent_graph(client, model_name, cls, code, obj.get("parsed_results"), args.temperature, args.max_rounds, args.threshold)
         bleu, rouge, meteor = eval_accuracies({0: [pred.strip().split('\n')[0]]}, {0: [label.strip().split('\n')[0]]})
         intent_scores[cls]['bleu'] += bleu
         intent_scores[cls]['meteor'] += meteor
