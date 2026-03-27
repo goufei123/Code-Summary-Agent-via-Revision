@@ -35,7 +35,7 @@ Two key tools support the framework, defined in `tool_module.py`:
 
 ### 2.4 Classifier Voting
 The script `prediction.py` performs voting across multiple classifier checkpoints:
-```
+```python
 python prediction.py \
   --input ./data/test.jsonl \
   --output ./output/preds.jsonl \
@@ -46,7 +46,7 @@ It supports majority and weighted voting, both locally and via HTTP endpoints. M
 
 ### 2.5 Agent Framework
 Run the iterative agentic summarization with:
-```
+```python
 python multi_agent.py \
   --model deepseek \
   --prompt_filename ./output/cls_examples_test_all.jsonl \
