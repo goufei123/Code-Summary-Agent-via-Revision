@@ -1,15 +1,19 @@
 # Iterative Agentic Framework for Code Summarization
-This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements an iterative generator–evaluator–planner–reviser loop, enhanced with external tools for content/context extraction and classifier-voting example selection.
+This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements an iterative generator–evaluator–assessor–reviser loop, enhanced with external tools for content/context extraction and classifier-voting example selection.
 
 ---
 
 ## 1 Project Summary
-The framework progressively refines code summaries to align with developer intents (What, Why, How-it-is-done, Property). It integrates:
-- A generator for initial summaries.
-- An evaluator that scores intent alignment, content adequacy, and usefulness.
-- A planner that proposes revision strategies.
-- A reviser that incorporates revision plans and supply information.
-Supply information is built from **content-aware analysis** (via a Java parser tool) and **example-aware retrieval** (via instance selection plus classifier voting). Classifier-voting ensembles multiple finetuned classifiers to filter high-confidence examples. Experiments show significant improvements over baseline summarization models.
+
+The framework progressively refines code summaries to better align with developer intent. A run consists of the following stages:
+
+1. **Generate** an initial one-sentence summary from the code and the requested intent.
+2. **Evaluate** the summary on three dimensions: `intent_alignment`, `content_adequacy`, and `usefulness`.
+3. **Plan** up to three concise revision actions.
+4. **Revise** the previous summary into a new one-sentence summary.
+5. **Stop** when the average evaluator score reaches the threshold, or when the maximum number of revision rounds is reached.
+
+The implementation uses a LangGraph state machine to realize this loop.
 
 ---
 
@@ -25,6 +29,17 @@ Supply information is built from **content-aware analysis** (via a Java parser t
 * jsonlines
 * Java Runtime (for running the parser JAR)
 
+```bash
+pip install openai langgraph jsonlines tqdm numpy datasets transformers torch
+```
+
+#### API keys
+`multi_agent.py` reads model credentials from environment variables:
+
+- `OPENAI_API_KEY` for `--model gpt`
+- `DEEPSEEK_API_KEY` for `--model deepseek`
+
+
 ### 2.2 Dataset
 We use an intent-annotated subset of the [CodeSearchNet-Java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code–comment pairs annotated with What, Why, How-it-is-done, and Property. Comments labeled as “Others” and rare categories like “How-to-use” are excluded. Scripts to preprocess and build this dataset are in `src/data/`. Classifier training for intent labeling is in `src/voting_classifier/`.
 
@@ -33,7 +48,7 @@ Two key tools support the framework, defined in `tool_module.py`:
 - `get_context`: calls a Java parser JAR (configured via `JAVA_PARSER_JAR`) to extract content information such as docstrings, targets, callees, and callers.
 - `get_examples`: retrieves candidate examples using `construction.instance_selection` and filters them with a finetuned classifier (local or HTTP service), applying majority or weighted voting.
 
-### 2.4 Classifier Voting
+### 2.4 Classifier
 The script `prediction.py` performs voting across multiple classifier checkpoints:
 ```python
 python prediction.py \
