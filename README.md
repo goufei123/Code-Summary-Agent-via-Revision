@@ -1,5 +1,5 @@
 # Iterative Agentic Framework for Code Summarization
-This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements an iterative generator–evaluator–assessor–reviser loop, enhanced with external tools for content/context extraction and classifier-voting example selection.
+This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements the paper's Generator--Reviewer loop: the Summarizer drafts and rewrites summaries, while the Reviewer contains an Assessor and a Planner that score drafts and produce revision plans. The loop is enhanced with support modules for content/context extraction and classifier-voting example selection.
 
 ---
 
@@ -7,11 +7,11 @@ This repository is the replication package for the paper *From Draft to Precisio
 
 The framework progressively refines code summaries to better align with developer intent. A run consists of the following stages:
 
-1. **Generate** an initial one-sentence summary from the code and the requested intent.
-2. **Evaluate** the summary on three dimensions: `intent_alignment`, `content_adequacy`, and `usefulness`.
-3. **Plan** up to three concise revision actions.
-4. **Revise** the previous summary into a new one-sentence summary.
-5. **Stop** when the average evaluator score reaches the threshold, or when the maximum number of revision rounds is reached.
+1. **Summarize** an initial one-sentence summary from the code and the requested intent.
+2. **Assess** the summary on three dimensions: `intent_alignment`, `content_adequacy`, and `usefulness`.
+3. **Plan** up to three concise revision actions when the draft does not pass the threshold.
+4. **Revise** the previous summary with the revision plans and optional support-module evidence.
+5. **Stop** when the average Assessor score reaches the threshold, or when the maximum number of revision rounds is reached.
 
 The implementation uses a LangGraph state machine to realize this loop.
 
@@ -41,17 +41,17 @@ pip install openai langgraph jsonlines tqdm numpy datasets transformers torch
 
 
 ### 2.2 Dataset
-We use an intent-annotated subset of the [CodeSearchNet-Java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code–comment pairs annotated with What, Why, How-it-is-done, and Property. Comments labeled as “Others” and rare categories like “How-to-use” are excluded. Scripts to preprocess and build this dataset are in `src/data/`. Classifier training for intent labeling is in `src/voting_classifier/`.
+We use an intent-annotated subset of the [CodeSearchNet-Java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code-comment pairs annotated with What, Why, How-it-is-done, and Property. Comments labeled as “Others” and the sparse “How-to-use” category are excluded. The resulting evaluation set contains 10,810 samples across the four evaluated intents. `src/agent_framework/dataloader.py` provides the conversion/filtering utility for JSONL inputs. Voting-based classifier inference for intent labeling is in `src/voting_classifier/`.
 
 ### 2.3 Tools
-Two key tools support the framework, defined in `tool_module.py`:
+Two key support modules are defined in `src/agent_framework/tool_module.py`:
 - `get_context`: calls a Java parser JAR (configured via `JAVA_PARSER_JAR`) to extract content information such as docstrings, targets, callees, and callers.
 - `get_examples`: retrieves candidate examples using `construction.instance_selection` and filters them with a finetuned classifier (local or HTTP service), applying majority or weighted voting.
 
 ### 2.4 Classifier
-The script `prediction.py` performs voting across multiple classifier checkpoints:
-```python
-python prediction.py \
+The script `src/voting_classifier/prediction.py` performs voting across multiple classifier checkpoints:
+```bash
+python src/voting_classifier/prediction.py \
   --input ./data/test.jsonl \
   --output ./output/preds.jsonl \
   --checkpoints ckpt_a.pt,ckpt_b.pt,ckpt_c.pt \
@@ -61,16 +61,20 @@ It supports majority and weighted voting, both locally and via HTTP endpoints. M
 
 ### 2.5 Agent Framework
 Run the iterative agentic summarization with:
-```python
-python multi_agent.py \
-  --model deepseek \
-  --prompt_filename ./output/cls_examples_test_all.jsonl \
+```bash
+python src/agent_framework/multi_agent.py \
+  --summarizer_model gpt \
+  --reviewer_model gpt \
+  --prompt_filename ./data/cls_examples_test_all.jsonl \
   --output_dir ./output/eval_result/ \
   --max_rounds 3 \
   --threshold 4.0 \
-  --temperature 0.2
+  --temperature 0.5 \
+  --top_p 0.75
 ```
-This loop generates, evaluates, plans, and revises summaries until a quality threshold or max rounds is reached. Supply information integrates outputs from `get_context` and `get_examples`.
+This loop summarizes, assesses, plans, and revises until the Assessor score reaches the threshold or the maximum number of revision rounds is reached. The default parameters match the revised manuscript setting: `max_rounds=3`, `threshold=4.0`, `temperature=0.5`, and `top_p=0.75`. Unless otherwise specified, the paper uses GPT-4o as the Reviewer backbone; `--reviewer_model` is exposed to run Reviewer-backbone sensitivity checks.
+
+For backward compatibility, `--model` remains as a deprecated alias for `--summarizer_model`.
 
 ### 2.6 Utils
 General helper functions are in `utils.py`:
@@ -87,7 +91,7 @@ General helper functions are in `utils.py`:
 
 ## 3. Prompt Templates
 
-This section summarizes the prompt logic currently implemented in `multi_agent.py`.
+This section summarizes the prompt logic currently implemented in `src/agent_framework/multi_agent.py`.
 
 ### 3.1 Intent-specific shorthand prompts
 
@@ -104,7 +108,7 @@ CLS_PROMPT = {
 
 These strings are useful for reproducing intent-specific prompting or one-shot baselines.
 
-### 3.2 Generator prompt used in the current loop
+### 3.2 Summarizer prompt used in the current loop
 
 **System prompt**
 
@@ -140,12 +144,12 @@ Possible output:
 Returns the sum of the two input integers.
 ```
 
-### 3.3 Assessor prompt
+### 3.3 Reviewer: Assessor prompt
 
 **System prompt**
 
 ```text
-You are an evaluator. Output a JSON with numeric fields intent_alignment, content_adequacy, usefulness scored from 1 to 5.
+You are the Assessor in a Reviewer agent. Output a JSON with numeric fields intent_alignment, content_adequacy, usefulness scored from 1 to 5.
 ```
 
 **User payload format**
@@ -168,12 +172,12 @@ Possible output:
 }
 ```
 
-### 3.4 Planner prompt
+### 3.4 Reviewer: Planner prompt
 
 **System prompt**
 
 ```text
-You are a planner. Given intent, code, current summary and scores, propose up to 3 concise revision plans. Output JSON {"plans": [..]}
+You are the Planner in a Reviewer agent. Given intent, code, current summary and scores, propose up to 3 concise revision plans. Output JSON {"plans": [..]}
 ```
 
 **User payload format**
@@ -203,12 +207,12 @@ Possible output:
 }
 ```
 
-### 3.5 Reviser prompt
+### 3.5 Summarizer revision prompt
 
 **System prompt**
 
 ```text
-You revise code comments. Rewrite into one sentence aligned with the intent, following the plans and using supply info when helpful. Return only the revised sentence.
+You are the Summarizer. Revise the code comment into one sentence aligned with the intent, following the plans and using supply info when helpful. Return only the revised sentence.
 ```
 
 **User payload format**

@@ -3,10 +3,16 @@ import json
 import jsonlines
 import argparse
 import logging
+import math
 from tqdm import tqdm
-from evaluation.evall.bleu import corpus_bleu
-from evaluation.evall.rouge import Rouge
-from evaluation.evall.meteor import Meteor
+try:
+    from evaluation.evall.bleu import corpus_bleu
+    from evaluation.evall.rouge import Rouge
+    from evaluation.evall.meteor import Meteor
+except ImportError:
+    corpus_bleu = None
+    Rouge = None
+    Meteor = None
 from openai import OpenAI
 from collections import defaultdict
 from tool_module import get_examples, get_context
@@ -27,22 +33,86 @@ MODEL_CONFIG = {
     "deepseek": {"type": "api", "model": "deepseek-chat", "base_url": "https://api.deepseek.com"}
 }
 
-def get_model_client(args):
-    config = MODEL_CONFIG[args.model]
+def get_model_client(model_key):
+    config = MODEL_CONFIG[model_key]
     if config["type"] == "api":
-        if args.model == "deepseek":
+        if model_key == "deepseek":
             return OpenAI(api_key=os.getenv("DEEPSEEK_API_KEY"), base_url=config["base_url"]), config["model"]
-        else:
-            return OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=config["base_url"]), config["model"]
+        return OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=config["base_url"]), config["model"]
     raise ValueError("Unsupported model type")
 
 def eval_accuracies(hypotheses, references):
-    _, bleu, _ = corpus_bleu(hypotheses, references)
-    rouge = Rouge().compute_score(references, hypotheses)[0]
-    meteor_calc = Meteor()
-    meteor = meteor_calc.compute_score(references, hypotheses)[0]
-    meteor_calc.close()
-    return bleu * 100, rouge * 100, meteor * 100
+    if corpus_bleu and Rouge and Meteor:
+        _, bleu, _ = corpus_bleu(hypotheses, references)
+        rouge = Rouge().compute_score(references, hypotheses)[0]
+        meteor_calc = Meteor()
+        meteor = meteor_calc.compute_score(references, hypotheses)[0]
+        meteor_calc.close()
+        return bleu * 100, rouge * 100, meteor * 100
+
+    prediction = next(iter(hypotheses.values()))[0]
+    reference = next(iter(references.values()))[0]
+    return _simple_bleu(prediction, reference), _simple_rouge_l(prediction, reference), _simple_meteor(prediction, reference)
+
+
+def _tokens(text):
+    return text.strip().split()
+
+
+def _simple_bleu(prediction, reference, max_n=4):
+    pred_tokens = _tokens(prediction)
+    ref_tokens = _tokens(reference)
+    if not pred_tokens or not ref_tokens:
+        return 0.0
+    precisions = []
+    for n in range(1, max_n + 1):
+        pred_counts = defaultdict(int)
+        ref_counts = defaultdict(int)
+        for i in range(len(pred_tokens) - n + 1):
+            pred_counts[tuple(pred_tokens[i:i + n])] += 1
+        for i in range(len(ref_tokens) - n + 1):
+            ref_counts[tuple(ref_tokens[i:i + n])] += 1
+        overlap = sum(min(count, ref_counts[ngram]) for ngram, count in pred_counts.items())
+        total = max(1, sum(pred_counts.values()))
+        precisions.append((overlap + 1e-9) / total)
+    brevity = 1.0 if len(pred_tokens) > len(ref_tokens) else math.exp(1 - len(ref_tokens) / max(1, len(pred_tokens)))
+    return brevity * math.exp(sum(math.log(p) for p in precisions) / max_n) * 100
+
+
+def _simple_rouge_l(prediction, reference):
+    pred_tokens = _tokens(prediction)
+    ref_tokens = _tokens(reference)
+    if not pred_tokens or not ref_tokens:
+        return 0.0
+    dp = [[0] * (len(ref_tokens) + 1) for _ in range(len(pred_tokens) + 1)]
+    for i, pred_token in enumerate(pred_tokens, 1):
+        for j, ref_token in enumerate(ref_tokens, 1):
+            if pred_token == ref_token:
+                dp[i][j] = dp[i - 1][j - 1] + 1
+            else:
+                dp[i][j] = max(dp[i - 1][j], dp[i][j - 1])
+    lcs = dp[-1][-1]
+    precision = lcs / len(pred_tokens)
+    recall = lcs / len(ref_tokens)
+    return (2 * precision * recall / (precision + recall) * 100) if precision + recall else 0.0
+
+
+def _simple_meteor(prediction, reference):
+    pred_tokens = _tokens(prediction)
+    ref_tokens = _tokens(reference)
+    if not pred_tokens or not ref_tokens:
+        return 0.0
+    ref_counts = defaultdict(int)
+    for token in ref_tokens:
+        ref_counts[token] += 1
+    matches = 0
+    for token in pred_tokens:
+        if ref_counts[token] > 0:
+            matches += 1
+            ref_counts[token] -= 1
+    precision = matches / len(pred_tokens)
+    recall = matches / len(ref_tokens)
+    return (10 * precision * recall / (recall + 9 * precision) * 100) if precision + recall else 0.0
 
 def save_predictions(path, records):
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -50,20 +120,26 @@ def save_predictions(path, records):
         for r in records:
             writer.write(r)
 
-def chat_complete(client, model_name, messages, temperature):
-    r = client.chat.completions.create(model=model_name, messages=messages, max_tokens=256, temperature=temperature)
+def chat_complete(client, model_name, messages, temperature, top_p):
+    r = client.chat.completions.create(
+        model=model_name,
+        messages=messages,
+        max_tokens=256,
+        temperature=temperature,
+        top_p=top_p,
+    )
     return r.choices[0].message.content.strip()
 
-def initial_summary(client, model_name, intent, code, temperature):
+def initial_summary(client, model_name, intent, code, temperature, top_p):
     name = INTENT_NAME.get(intent, intent)
-    sys = "You write precise one-sentence code comments aligned with a requested intent."
+    sys = "You are the Summarizer. Write precise one-sentence code comments aligned with a requested intent."
     usr = f"Intent: {name}\nCode:\n{code}\nReturn only one sentence."
-    return chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": usr}], temperature)
+    return chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": usr}], temperature, top_p)
 
-def assess_summary(client, model_name, intent, code, summary, temperature):
-    sys = "You are an evaluator. Output a JSON with numeric fields intent_alignment, content_adequacy, usefulness scored from 1 to 5."
+def assess_summary(client, model_name, intent, code, summary, temperature, top_p):
+    sys = "You are the Assessor in a Reviewer agent. Output a JSON with numeric fields intent_alignment, content_adequacy, usefulness scored from 1 to 5."
     usr = json.dumps({"intent": INTENT_NAME.get(intent, intent), "code": code, "summary": summary})
-    out = chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": usr}], temperature)
+    out = chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": usr}], temperature, top_p)
     try:
         j = None
         s = out
@@ -84,10 +160,10 @@ def assess_summary(client, model_name, intent, code, summary, temperature):
     except Exception:
         return 0.0, {"intent_alignment": 0.0, "content_adequacy": 0.0, "usefulness": 0.0}
 
-def plan_revisions(client, model_name, intent, code, summary, scores, temperature):
-    sys = "You are a planner. Given intent, code, current summary and scores, propose up to 3 concise revision plans. Output JSON {\"plans\": [..]}"
+def plan_revisions(client, model_name, intent, code, summary, scores, temperature, top_p):
+    sys = "You are the Planner in a Reviewer agent. Given intent, code, current summary and scores, propose up to 3 concise revision plans. Output JSON {\"plans\": [..]}"
     payload = {"intent": INTENT_NAME.get(intent, intent), "scores": scores, "code": code, "summary": summary}
-    out = chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(payload)}], temperature)
+    out = chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(payload)}], temperature, top_p)
     try:
         s = out
         start = s.find("{")
@@ -120,32 +196,32 @@ def build_supply_info(intent, code, parsed_results, need_context=False, need_exa
             parts.append(ctx)
     return "\n\n".join(parts)
 
-def revise_summary(client, model_name, intent, code, prev_summary, plans, supply_info, temperature):
+def revise_summary(client, model_name, intent, code, prev_summary, plans, supply_info, temperature, top_p):
     name = INTENT_NAME.get(intent, intent)
-    sys = "You revise code comments. Rewrite into one sentence aligned with the intent, following the plans and using supply info when helpful. Return only the revised sentence."
+    sys = "You are the Summarizer. Revise the code comment into one sentence aligned with the intent, following the plans and using supply info when helpful. Return only the revised sentence."
     data = {"intent": name, "code": code, "previous_summary": prev_summary, "plans": plans, "supply_info": supply_info}
-    return chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(data)}], temperature)
+    return chat_complete(client, model_name, [{"role": "system", "content": sys}, {"role": "user", "content": json.dumps(data)}], temperature, top_p)
 
 class AgentState(dict):
     pass
 
-def build_agent_graph(client, model_name, temperature, threshold, max_rounds):
+def build_agent_graph(summarizer_client, summarizer_model, reviewer_client, reviewer_model, temperature, top_p, threshold, max_rounds):
     def node_generate(state: AgentState):
         s = state.copy()
-        s["summary"] = initial_summary(client, model_name, s["intent"], s["code"], temperature)
+        s["summary"] = initial_summary(summarizer_client, summarizer_model, s["intent"], s["code"], temperature, top_p)
         s["round"] = 0
         return s
 
     def node_evaluate(state: AgentState):
         s = state.copy()
-        avg, scores = assess_summary(client, model_name, s["intent"], s["code"], s.get("summary", ""), temperature)
+        avg, scores = assess_summary(reviewer_client, reviewer_model, s["intent"], s["code"], s.get("summary", ""), temperature, top_p)
         s["avg"] = avg
         s["scores"] = scores
         return s
 
     def node_plan(state: AgentState):
         s = state.copy()
-        plans = plan_revisions(client, model_name, s["intent"], s["code"], s.get("summary", ""), s.get("scores", {}), temperature)
+        plans = plan_revisions(reviewer_client, reviewer_model, s["intent"], s["code"], s.get("summary", ""), s.get("scores", {}), temperature, top_p)
         s["plans"] = plans
         need_ctx = False
         need_ex = False
@@ -167,7 +243,7 @@ def build_agent_graph(client, model_name, temperature, threshold, max_rounds):
 
     def node_revise(state: AgentState):
         s = state.copy()
-        new_summary = revise_summary(client, model_name, s["intent"], s["code"], s.get("summary", ""), s.get("plans", []), s.get("supply_info", ""), temperature)
+        new_summary = revise_summary(summarizer_client, summarizer_model, s["intent"], s["code"], s.get("summary", ""), s.get("plans", []), s.get("supply_info", ""), temperature, top_p)
         s["summary"] = new_summary
         s["round"] = int(s.get("round", 0)) + 1
         return s
@@ -198,17 +274,20 @@ def build_agent_graph(client, model_name, temperature, threshold, max_rounds):
     return graph.compile()
 
 
-def run_agent_graph(client, model_name, intent, code, parsed_results, temperature, max_rounds, threshold):
-    app = build_agent_graph(client, model_name, temperature, threshold, max_rounds)
+def run_agent_graph(summarizer_client, summarizer_model, reviewer_client, reviewer_model, intent, code, parsed_results, temperature, top_p, max_rounds, threshold):
+    app = build_agent_graph(summarizer_client, summarizer_model, reviewer_client, reviewer_model, temperature, top_p, threshold, max_rounds)
     state = AgentState({"intent": intent, "code": code, "parsed_results": parsed_results})
     out = app.invoke(state)
     return out.get("summary", ""), float(out.get("avg", 0.0)), out.get("scores", {})
 
 def generate(args, data):
-    client, model_name = get_model_client(args)
+    summarizer_key = args.summarizer_model or args.model or "gpt"
+    reviewer_key = args.reviewer_model or "gpt"
+    summarizer_client, summarizer_model = get_model_client(summarizer_key)
+    reviewer_client, reviewer_model = get_model_client(reviewer_key)
     intents = ["what", "done", "property", "why"]
     intent_scores = {k: {'bleu': 0, 'meteor': 0, 'rouge_l': 0, 'count': 0} for k in intents}
-    save_path = os.path.join(args.output_dir, f"agent_{args.model}.jsonl")
+    save_path = os.path.join(args.output_dir, f"agent_{summarizer_key}_reviewer_{reviewer_key}.jsonl")
     all_records = []
     for idx, obj in tqdm(enumerate(data)):
         if idx >= args.test_number:
@@ -218,13 +297,25 @@ def generate(args, data):
         cls = obj["label"]
         if cls not in intents:
             continue
-        pred, avg, scores = run_agent_graph(client, model_name, cls, code, obj.get("parsed_results"), args.temperature, args.max_rounds, args.threshold)
+        pred, avg, scores = run_agent_graph(
+            summarizer_client,
+            summarizer_model,
+            reviewer_client,
+            reviewer_model,
+            cls,
+            code,
+            obj.get("parsed_results"),
+            args.temperature,
+            args.top_p,
+            args.max_rounds,
+            args.threshold,
+        )
         bleu, rouge, meteor = eval_accuracies({0: [pred.strip().split('\n')[0]]}, {0: [label.strip().split('\n')[0]]})
         intent_scores[cls]['bleu'] += bleu
         intent_scores[cls]['meteor'] += meteor
         intent_scores[cls]['rouge_l'] += rouge
         intent_scores[cls]['count'] += 1
-        record = {"intent": cls, "code": code, "ori_code": obj.get("ori_code", code), "label": label, "prediction": pred, "assessor_avg": avg, "assessor_scores": scores, "bleu": bleu, "rouge": rouge, "meteor": meteor}
+        record = {"intent": cls, "code": code, "ori_code": obj.get("ori_code", code), "label": label, "prediction": pred, "summarizer_model": summarizer_key, "reviewer_model": reviewer_key, "assessor_avg": avg, "assessor_scores": scores, "bleu": bleu, "rouge": rouge, "meteor": meteor}
         all_records.append(record)
     save_predictions(save_path, all_records)
     for cls in intents:
@@ -239,10 +330,13 @@ def generate(args, data):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", choices=["gpt", "deepseek"], default="deepseek")
+    parser.add_argument("--model", choices=["gpt", "deepseek"], default=None, help="Deprecated alias for --summarizer_model.")
+    parser.add_argument("--summarizer_model", choices=["gpt", "deepseek"], default="gpt")
+    parser.add_argument("--reviewer_model", choices=["gpt", "deepseek"], default="gpt")
     parser.add_argument("--prompt_filename", default="./dataset/cls_examples_test_all.jsonl", type=str)
     parser.add_argument("--output_dir", default="./output/eval_result/", type=str)
-    parser.add_argument("--temperature", default=0.75, type=float)
+    parser.add_argument("--temperature", default=0.5, type=float)
+    parser.add_argument("--top_p", default=0.75, type=float)
     parser.add_argument("--test_number", default=15000, type=int)
     parser.add_argument("--max_rounds", default=3, type=int)
     parser.add_argument("--threshold", default=4.0, type=float)
