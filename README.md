@@ -89,6 +89,28 @@ General helper functions are in `utils.py`:
 
 ---
 
-## 3. Additional Documentation
+## 3 Citation
+
+If you use this repository, please cite our ISSTA 2026 paper:
+
+```bibtex
+@article{ge2026draft,
+  author = {Ge, Yifei and Fang, Chunrong and Chen, Zhenyu and Zhai, Juan},
+  title = {From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization},
+  journal = {Proceedings of the ACM on Software Engineering},
+  volume = {3},
+  number = {ISSTA},
+  articleno = {ISSTA059},
+  year = {2026},
+  month = oct,
+  publisher = {Association for Computing Machinery},
+  address = {New York, NY, USA},
+  doi = {10.1145/3832150}
+}
+```
+
+---
+
+## 4 Additional Documentation
 
 - Prompt templates and example payloads are documented in [PROMPTS.md](PROMPTS.md).
