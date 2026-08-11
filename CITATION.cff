@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this artifact, please cite the associated paper."
+title: "Artifact for From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization"
+type: software
+authors:
+  - family-names: Ge
+    given-names: Yifei
+    affiliation: Nanjing University
+  - family-names: Fang
+    given-names: Chunrong
+    affiliation: Nanjing University
+  - family-names: Chen
+    given-names: Zhenyu
+    affiliation: Nanjing University
+  - family-names: Zhai
+    given-names: Juan
+    affiliation: University of Massachusetts Amherst
+repository-code: "https://github.com/goufei123/Code-Summary-Agent-via-Revision"
+version: 1.0.0
+preferred-citation:
+  type: article
+  title: "From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization"
+  authors:
+    - family-names: Ge
+      given-names: Yifei
+    - family-names: Fang
+      given-names: Chunrong
+    - family-names: Chen
+      given-names: Zhenyu
+    - family-names: Zhai
+      given-names: Juan
+  doi: "10.1145/3832150"
+  year: 2026

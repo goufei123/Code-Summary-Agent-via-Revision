@@ -1,5 +1,5 @@
 # Iterative Agentic Framework for Code Summarization
-This repository is the replication package for the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements the paper's Generator--Reviewer loop: the Summarizer drafts and rewrites summaries, while the Reviewer contains an Assessor and a Planner that score drafts and produce revision plans. The loop is enhanced with support modules for content/context extraction and classifier-voting example selection.
+This repository contains the research artifact accompanying the paper *From Draft to Precision: Iterative Agentic Framework for Intent-Aware Code Summarization*. It implements the paper's Generator--Reviewer loop: the Summarizer drafts and rewrites summaries, while the Reviewer contains an Assessor and a Planner that score drafts and produce revision plans. The loop is enhanced with support modules for content/context extraction and classifier-voting example selection.
 
 ---
 
@@ -17,8 +17,24 @@ The implementation uses a LangGraph state machine to realize this loop.
 
 ---
 
-## 2 Get Started
-### 2.1 Requirements
+## 2 Artifact Scope
+
+The archived artifact contains:
+
+- the Generator--Reviewer framework implementation;
+- the prompt templates used by the framework;
+- the voting-based intent-classification wrapper;
+- data loading and utility scripts; and
+- a supplementary collection of comments from eight Java projects in `src/outputs/agent_comment.jsonl`.
+
+Full experimental reproduction additionally requires resources that are not redistributed in this repository: the intent-annotated CodeSearchNet-Java data, intent-classifier checkpoints, the Java parser JAR, the external `construction.instance_selection` component, and credentials for the configured model APIs. The framework degrades gracefully when the optional parser and example-selection components are unavailable, but reproducing every table in the paper requires the corresponding external resources and services.
+
+No API credentials are included in the artifact. They must be supplied through environment variables as described below.
+
+---
+
+## 3 Get Started
+### 3.1 Requirements
 * OS: Ubuntu 20.04 or later
 * Python 3.10+
 * PyTorch (compatible with CUDA 11.8/12.x)
@@ -29,8 +45,10 @@ The implementation uses a LangGraph state machine to realize this loop.
 * jsonlines
 * Java Runtime (for running the parser JAR)
 
+Install the Python dependencies with:
+
 ```bash
-pip install openai langgraph jsonlines tqdm numpy datasets transformers torch
+pip install -r requirements.txt
 ```
 
 #### API keys
@@ -40,15 +58,15 @@ pip install openai langgraph jsonlines tqdm numpy datasets transformers torch
 - `DEEPSEEK_API_KEY` for `--model deepseek`
 
 
-### 2.2 Dataset
+### 3.2 Dataset
 We use an intent-annotated subset of the [CodeSearchNet-Java](https://github.com/microsoft/CodeXGLUE) dataset. It contains code-comment pairs annotated with What, Why, How-it-is-done, and Property. Comments labeled as “Others” and the sparse “How-to-use” category are excluded. The resulting evaluation set contains 10,810 samples across the four evaluated intents. `src/agent_framework/dataloader.py` provides the conversion/filtering utility for JSONL inputs. Voting-based classifier inference for intent labeling is in `src/voting_classifier/`.
 
-### 2.3 Tools
+### 3.3 Tools
 Two key support modules are defined in `src/agent_framework/tool_module.py`:
 - `get_context`: calls a Java parser JAR (configured via `JAVA_PARSER_JAR`) to extract content information such as docstrings, targets, callees, and callers.
 - `get_examples`: retrieves candidate examples using `construction.instance_selection` and filters them with a finetuned classifier (local or HTTP service), applying majority or weighted voting.
 
-### 2.4 Classifier
+### 3.4 Classifier
 The script `src/voting_classifier/prediction.py` performs voting across multiple classifier checkpoints:
 ```bash
 python src/voting_classifier/prediction.py \
@@ -59,7 +77,7 @@ python src/voting_classifier/prediction.py \
 ```
 It supports majority and weighted voting, both locally and via HTTP endpoints. Metrics (accuracy, macro precision/recall/F1) are saved alongside predictions.
 
-### 2.5 Agent Framework
+### 3.5 Agent Framework
 Run the iterative agentic summarization with:
 ```bash
 python src/agent_framework/multi_agent.py \
@@ -76,8 +94,8 @@ This loop summarizes, assesses, plans, and revises until the Assessor score reac
 
 For backward compatibility, `--model` remains as a deprecated alias for `--summarizer_model`.
 
-### 2.6 Utils
-General helper functions are in `utils.py`:
+### 3.6 Utils
+General helper functions are in `src/utils.py`:
 - `set_seed(seed)`: set random seeds for reproducibility.
 - `read_jsonl(path)`, `write_jsonl(path, rows)`: handle JSONL files.
 - `normalize_text(s)`: normalize text to lowercase and strip extra spaces.
@@ -89,7 +107,7 @@ General helper functions are in `utils.py`:
 
 ---
 
-## 3 Citation
+## 4 Citation
 
 If you use this repository, please cite our ISSTA 2026 paper:
 
@@ -111,6 +129,6 @@ If you use this repository, please cite our ISSTA 2026 paper:
 
 ---
 
-## 4 Additional Documentation
+## 5 Additional Documentation
 
 - Prompt templates and example payloads are documented in [PROMPTS.md](PROMPTS.md).
