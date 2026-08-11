@@ -24,8 +24,7 @@ The archived artifact contains:
 - the Generator--Reviewer framework implementation;
 - the prompt templates used by the framework;
 - the voting-based intent-classification wrapper;
-- data loading and utility scripts; and
-- a supplementary collection of comments from eight Java projects in `src/outputs/agent_comment.jsonl`.
+- data loading and utility scripts.
 
 Full experimental reproduction additionally requires resources that are not redistributed in this repository: the intent-annotated CodeSearchNet-Java data, intent-classifier checkpoints, the Java parser JAR, the external `construction.instance_selection` component, and credentials for the configured model APIs. The framework degrades gracefully when the optional parser and example-selection components are unavailable, but reproducing every table in the paper requires the corresponding external resources and services.
 
